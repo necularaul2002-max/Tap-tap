@@ -8,6 +8,14 @@ workflows:
       java: 17
       xcode: latest
 
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+
     cache:
       cache_paths:
         - $HOME/.gradle/caches
