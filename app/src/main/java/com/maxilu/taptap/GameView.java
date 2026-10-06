@@ -2,10 +2,18 @@ package com.maxilu.taptap;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.RadialGradient;
+import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.Shader;
+import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -25,10 +33,20 @@ public class GameView extends View {
     private static final int ADULT = 3;
 
     private final SharedPreferences sp;
-    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final ArrayList<Creature> creatures = new ArrayList<>();
     private final Random random = new Random();
-    private final Drawable[][] creatureArt;
+    private final Drawable[][] fallbackArt;
+    private final Bitmap[] evolutionSheets = new Bitmap[2];
+    private final Bitmap logo;
+    private final float density;
+
+    private final RectF starterLight = new RectF();
+    private final RectF starterDark = new RectF();
+    private final RectF nextButton = new RectF();
+    private final RectF eggButton = new RectF();
+    private final RectF tapButton = new RectF();
+    private final RectF afkButton = new RectF();
 
     private double coins;
     private double tapPower = 1.0;
@@ -37,9 +55,11 @@ public class GameView extends View {
     private int nextId = 1;
     private long lastSeen;
     private boolean firstHatchUnlockedOpposite;
+    private boolean ticking;
 
     private final Runnable passiveTick = new Runnable() {
         @Override public void run() {
+            if (!ticking) return;
             addPassiveIncome(1.0);
             invalidate();
             postDelayed(this, 1000L);
@@ -62,8 +82,10 @@ public class GameView extends View {
 
     public GameView(Context context) {
         super(context);
+        density = getResources().getDisplayMetrics().density;
         sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        creatureArt = new Drawable[][]{
+
+        fallbackArt = new Drawable[][]{
                 {
                         context.getDrawable(R.drawable.light_egg),
                         context.getDrawable(R.drawable.light_baby),
@@ -77,12 +99,21 @@ public class GameView extends View {
                         context.getDrawable(R.drawable.dark_adult)
                 }
         };
-        paint.setTypeface(android.graphics.Typeface.create("sans", android.graphics.Typeface.NORMAL));
-        setBackgroundColor(0xFF171526);
+
+        evolutionSheets[LIGHT] =
+                BitmapFactory.decodeResource(getResources(), R.drawable.light_evolution_real);
+        evolutionSheets[DARK] =
+                ArtLoader.loadBase64Chunks(context, "v2/dark_", 4);
+        logo = BitmapFactory.decodeResource(getResources(), R.drawable.tap_tap_icon);
+
+        paint.setTypeface(Typeface.create("sans", Typeface.NORMAL));
+        setBackgroundColor(0xFF0C0A16);
+        setFocusable(true);
         load();
-        applyOffline();
-        removeCallbacks(passiveTick);
-        postDelayed(passiveTick, 1000L);
+    }
+
+    private float dp(float value) {
+        return value * density;
     }
 
     private void load() {
@@ -126,9 +157,22 @@ public class GameView extends View {
         e.apply();
     }
 
-    public void saveAndLeave() {
+    public void pauseGame() {
+        ticking = false;
+        removeCallbacks(passiveTick);
         lastSeen = System.currentTimeMillis();
         save();
+    }
+
+    public void resumeGame() {
+        applyOffline();
+        ticking = true;
+        removeCallbacks(passiveTick);
+        postDelayed(passiveTick, 1000L);
+    }
+
+    public void saveAndLeave() {
+        pauseGame();
     }
 
     public void applyOffline() {
@@ -138,9 +182,7 @@ public class GameView extends View {
             double before = coins;
             addPassiveIncome(elapsed / 1000.0);
             long earned = Math.max(0L, Math.round(coins - before));
-            if (earned > 0) {
-                NotificationHelper.showOfflineReward(getContext(), earned);
-            }
+            if (earned > 0) NotificationHelper.showOfflineReward(getContext(), earned);
         }
         lastSeen = now;
         save();
@@ -157,6 +199,7 @@ public class GameView extends View {
         Creature c = new Creature(nextId++, type, EGG, 0.0);
         creatures.add(c);
         activeId = c.id;
+        haptic();
         save();
         invalidate();
     }
@@ -169,14 +212,14 @@ public class GameView extends View {
     }
 
     private String stageName(int stage) {
-        if (stage == EGG) return "Egg";
-        if (stage == BABY) return "Baby";
-        if (stage == MID) return "Mid";
-        return "Adult";
+        if (stage == EGG) return "EGG";
+        if (stage == BABY) return "BABY";
+        if (stage == MID) return "MID";
+        return "ADULT";
     }
 
     private String typeName(int type) {
-        return type == LIGHT ? "Light" : "Dark";
+        return type == LIGHT ? "LIGHT" : "DARK";
     }
 
     private double baseIncome(Creature c) {
@@ -198,29 +241,27 @@ public class GameView extends View {
     private void tapActive() {
         Creature c = activeCreature();
         if (c == null) return;
-
+        haptic();
         coins += tapPower;
-        if (c.stage >= ADULT) {
-            save();
-            invalidate();
-            return;
-        }
 
-        c.progress += tapPower;
-        double needed = stageThreshold(c.stage);
-        if (c.progress >= needed) {
-            c.progress -= needed;
-            c.stage++;
+        if (c.stage < ADULT) {
+            c.progress += tapPower;
+            double needed = stageThreshold(c.stage);
+            if (c.progress >= needed) {
+                c.progress -= needed;
+                c.stage++;
 
-            if (c.stage == BABY) {
-                NotificationHelper.showEggReady(getContext(), typeName(c.type) + " Baby");
-                if (!firstHatchUnlockedOpposite) {
-                    firstHatchUnlockedOpposite = true;
-                    int opposite = c.type == LIGHT ? DARK : LIGHT;
-                    creatures.add(new Creature(nextId++, opposite, EGG, 0.0));
+                if (c.stage == BABY) {
+                    NotificationHelper.showEggReady(getContext(), typeName(c.type) + " Baby");
+                    if (!firstHatchUnlockedOpposite) {
+                        firstHatchUnlockedOpposite = true;
+                        int opposite = c.type == LIGHT ? DARK : LIGHT;
+                        creatures.add(new Creature(nextId++, opposite, EGG, 0.0));
+                    }
                 }
             }
         }
+
         save();
         invalidate();
     }
@@ -235,6 +276,7 @@ public class GameView extends View {
             }
         }
         activeId = creatures.get((index + 1) % creatures.size()).id;
+        haptic();
         save();
         invalidate();
     }
@@ -254,6 +296,7 @@ public class GameView extends View {
         if (coins < cost) return;
         coins -= cost;
         tapPower += 0.5;
+        haptic();
         save();
         invalidate();
     }
@@ -263,6 +306,7 @@ public class GameView extends View {
         if (coins < cost) return;
         coins -= cost;
         passivePower += 0.5;
+        haptic();
         save();
         invalidate();
     }
@@ -274,167 +318,316 @@ public class GameView extends View {
         Creature egg = new Creature(nextId++, type, EGG, 0.0);
         creatures.add(egg);
         if (activeId < 0) activeId = egg.id;
+        haptic();
         save();
         invalidate();
     }
 
-    private void drawText(Canvas c, String text, float x, float y, float size, int color, Paint.Align align) {
+    private void haptic() {
+        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+    }
+
+    private void drawBackground(Canvas canvas, int type) {
+        int top = type == LIGHT ? 0xFF17131E : 0xFF100B20;
+        int bottom = 0xFF080711;
+        paint.setShader(new LinearGradient(0, 0, 0, getHeight(), top, bottom, Shader.TileMode.CLAMP));
+        canvas.drawRect(0, 0, getWidth(), getHeight(), paint);
+        paint.setShader(null);
+
+        float glowX = type == LIGHT ? getWidth() * 0.28f : getWidth() * 0.72f;
+        int glow = type == LIGHT ? 0x55F5C84C : 0x556A39FF;
+        paint.setShader(new RadialGradient(glowX, getHeight() * 0.28f,
+                getWidth() * 0.72f, glow, 0x00000000, Shader.TileMode.CLAMP));
+        canvas.drawCircle(glowX, getHeight() * 0.28f, getWidth() * 0.72f, paint);
+        paint.setShader(null);
+    }
+
+    private void text(Canvas c, String value, float x, float y, float sizeSp,
+                      int color, Paint.Align align, boolean bold) {
         paint.setStyle(Paint.Style.FILL);
+        paint.setShader(null);
         paint.setColor(color);
-        paint.setTextSize(size);
+        paint.setTextSize(dp(sizeSp));
         paint.setTextAlign(align);
-        paint.setTypeface(android.graphics.Typeface.create("sans", android.graphics.Typeface.BOLD));
-        c.drawText(text, x, y, paint);
+        paint.setTypeface(Typeface.create("sans", bold ? Typeface.BOLD : Typeface.NORMAL));
+        c.drawText(value, x, y, paint);
     }
 
-    private void drawButton(Canvas c, RectF r, String text, boolean enabled) {
+    private void pill(Canvas c, RectF r, int fill, int stroke) {
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(enabled ? 0xFF312A50 : 0xFF262238);
-        c.drawRoundRect(r, 24f, 24f, paint);
+        paint.setColor(fill);
+        c.drawRoundRect(r, dp(18), dp(18), paint);
         paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(3f);
-        paint.setColor(enabled ? 0xFF8B6CFF : 0xFF514B66);
-        c.drawRoundRect(r, 24f, 24f, paint);
-        drawText(c, text, r.centerX(), r.centerY() + 8f, 28f,
-                enabled ? 0xFFFFFFFF : 0xFF8A8597, Paint.Align.CENTER);
+        paint.setStrokeWidth(dp(1.2f));
+        paint.setColor(stroke);
+        c.drawRoundRect(r, dp(18), dp(18), paint);
     }
 
-    private void drawCreature(Canvas canvas, Creature cr, float cx, float cy, float radius) {
-        int safeType = cr.type == DARK ? DARK : LIGHT;
-        int safeStage = Math.max(EGG, Math.min(ADULT, cr.stage));
-        Drawable art = creatureArt[safeType][safeStage];
-        if (art == null) return;
+    private void drawLogo(Canvas canvas, float cx, float cy, float size) {
+        if (logo == null) return;
+        Rect src = new Rect(0, 0, logo.getWidth(), logo.getHeight());
+        RectF dst = new RectF(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f);
+        canvas.drawBitmap(logo, src, dst, paint);
+    }
 
-        int size = Math.round(radius * 2.35f);
-        int left = Math.round(cx - size / 2f);
-        int top = Math.round(cy - size / 2f);
-        art.setBounds(left, top, left + size, top + size);
+    private Rect spriteRect(Bitmap sheet, int stage) {
+        int cw = sheet.getWidth() / 2;
+        int ch = sheet.getHeight() / 2;
+        int col = stage % 2;
+        int row = stage / 2;
+        int x = col * cw;
+        int y = row * ch;
+
+        int left = x + Math.round(cw * 0.07f);
+        int top = y + Math.round(ch * 0.05f);
+        int right = x + Math.round(cw * 0.93f);
+        int bottom = y + Math.round(ch * 0.84f);
+        return new Rect(left, top, right, bottom);
+    }
+
+    private void drawCreatureArt(Canvas canvas, int type, int stage, RectF dst) {
+        int safeType = type == DARK ? DARK : LIGHT;
+        int safeStage = Math.max(EGG, Math.min(ADULT, stage));
+        Bitmap sheet = evolutionSheets[safeType];
+
+        if (sheet != null && !sheet.isRecycled()) {
+            canvas.drawBitmap(sheet, spriteRect(sheet, safeStage), dst, paint);
+            return;
+        }
+
+        Drawable art = fallbackArt[safeType][safeStage];
+        if (art == null) return;
+        art.setBounds(Math.round(dst.left), Math.round(dst.top),
+                Math.round(dst.right), Math.round(dst.bottom));
         art.draw(canvas);
     }
 
-    private void drawStarterCard(Canvas canvas, RectF card, int type, String label) {
+    private void drawStarterCard(Canvas canvas, RectF r, int type) {
+        boolean light = type == LIGHT;
+        int accent = light ? 0xFFFFD45C : 0xFF8156FF;
+        int accentSoft = light ? 0x33FFD45C : 0x338156FF;
+
+        paint.setShader(new LinearGradient(r.left, r.top, r.right, r.bottom,
+                light ? 0xEE302B34 : 0xEE211832,
+                light ? 0xEE181520 : 0xEE100D1C,
+                Shader.TileMode.CLAMP));
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(type == LIGHT ? 0xFF332D48 : 0xFF211B35);
-        canvas.drawRoundRect(card, 28f, 28f, paint);
+        canvas.drawRoundRect(r, dp(26), dp(26), paint);
+        paint.setShader(null);
 
         paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(4f);
-        paint.setColor(type == LIGHT ? 0xFFFFD34E : 0xFF7B4DFF);
-        canvas.drawRoundRect(card, 28f, 28f, paint);
+        paint.setStrokeWidth(dp(1.5f));
+        paint.setColor(accent);
+        canvas.drawRoundRect(r, dp(26), dp(26), paint);
 
-        Drawable egg = creatureArt[type][EGG];
-        int artSize = Math.round(Math.min(card.width(), card.height()) * 0.62f);
-        int cx = Math.round(card.centerX());
-        int cy = Math.round(card.top + card.height() * 0.42f);
-        egg.setBounds(cx - artSize / 2, cy - artSize / 2, cx + artSize / 2, cy + artSize / 2);
-        egg.draw(canvas);
+        RectF glow = new RectF(r.left + dp(12), r.top + dp(12),
+                r.left + r.height() - dp(12), r.bottom - dp(12));
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(accentSoft);
+        canvas.drawRoundRect(glow, dp(22), dp(22), paint);
 
-        drawText(canvas, label, card.centerX(), card.bottom - 34f, 25f,
-                0xFFFFFFFF, Paint.Align.CENTER);
+        float artSize = r.height() * 0.76f;
+        RectF art = new RectF(r.left + dp(9), r.centerY() - artSize / 2,
+                r.left + dp(9) + artSize, r.centerY() + artSize / 2);
+        drawCreatureArt(canvas, type, EGG, art);
+
+        float tx = r.left + r.height() + dp(12);
+        text(canvas, light ? "LIGHT EGG" : "DARK EGG",
+                tx, r.centerY() - dp(12), 20, 0xFFFFFFFF, Paint.Align.LEFT, true);
+        text(canvas, light ? "RADIANT ORIGIN" : "VOID ORIGIN",
+                tx, r.centerY() + dp(13), 10, accent, Paint.Align.LEFT, true);
+        text(canvas, light ? "Warm · celestial · balanced" : "Mystic · void · intense",
+                tx, r.centerY() + dp(34), 10, 0xFFB9B4C8, Paint.Align.LEFT, false);
+    }
+
+    private void drawStart(Canvas canvas) {
+        drawBackground(canvas, DARK);
+        float w = getWidth();
+        float h = getHeight();
+
+        drawLogo(canvas, w / 2f, dp(82), dp(82));
+        text(canvas, "TAP TAP", w / 2f, dp(143), 30,
+                0xFFFFFFFF, Paint.Align.CENTER, true);
+        text(canvas, "V2 BETA  ·  CHOOSE YOUR ORIGIN", w / 2f, dp(166), 10,
+                0xFFAAA4BC, Paint.Align.CENTER, true);
+
+        float cardH = Math.min(dp(184), h * 0.205f);
+        float left = dp(18);
+        float right = w - dp(18);
+        float firstTop = Math.max(dp(200), h * 0.245f);
+        float gap = dp(18);
+
+        starterLight.set(left, firstTop, right, firstTop + cardH);
+        starterDark.set(left, starterLight.bottom + gap, right,
+                starterLight.bottom + gap + cardH);
+
+        drawStarterCard(canvas, starterLight, LIGHT);
+        drawStarterCard(canvas, starterDark, DARK);
+
+        text(canvas, "Tap one egg to begin your collection",
+                w / 2f, Math.min(h - dp(34), starterDark.bottom + dp(42)),
+                11, 0xFFD2CCDF, Paint.Align.CENTER, false);
+    }
+
+    private void drawTopBar(Canvas canvas) {
+        float w = getWidth();
+        drawLogo(canvas, dp(42), dp(46), dp(52));
+        text(canvas, "TAP TAP", dp(78), dp(42), 19,
+                0xFFFFFFFF, Paint.Align.LEFT, true);
+        text(canvas, "MONSTER LAB", dp(78), dp(59), 8,
+                0xFF948EA8, Paint.Align.LEFT, true);
+
+        RectF coinsPill = new RectF(w - dp(142), dp(24), w - dp(16), dp(66));
+        pill(canvas, coinsPill, 0xCC1A1725, 0x55FFFFFF);
+        text(canvas, "COINS", coinsPill.left + dp(14), coinsPill.centerY() - dp(3),
+                8, 0xFFA9A3B9, Paint.Align.LEFT, true);
+        text(canvas, String.valueOf(Math.max(0L, Math.round(coins))),
+                coinsPill.left + dp(14), coinsPill.centerY() + dp(13),
+                14, 0xFFFFD45C, Paint.Align.LEFT, true);
+    }
+
+    private void drawProgress(Canvas canvas, Creature active, RectF panel, int accent) {
+        float left = panel.left + dp(20);
+        float right = panel.right - dp(20);
+        float y = panel.bottom - dp(46);
+
+        if (active.stage >= ADULT) {
+            text(canvas, "ADULT MAX STAGE · KEEP TAPPING FOR COINS",
+                    panel.centerX(), y + dp(6), 10, 0xFFCBC5D8,
+                    Paint.Align.CENTER, true);
+            return;
+        }
+
+        double needed = stageThreshold(active.stage);
+        float p = (float) Math.max(0, Math.min(1, active.progress / needed));
+
+        RectF track = new RectF(left, y, right, y + dp(8));
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0x552F2B3C);
+        canvas.drawRoundRect(track, dp(6), dp(6), paint);
+
+        RectF fill = new RectF(track.left, track.top,
+                track.left + track.width() * p, track.bottom);
+        paint.setColor(accent);
+        canvas.drawRoundRect(fill, dp(6), dp(6), paint);
+
+        text(canvas, "TAP TO EVOLVE  ·  " + Math.round(p * 100f) + "%",
+                panel.centerX(), y - dp(10), 10, 0xFFE1DCE9,
+                Paint.Align.CENTER, true);
+    }
+
+    private void drawControl(Canvas canvas, RectF r, String title, String detail,
+                             boolean enabled, int accent) {
+        int fill = enabled ? 0xD9201C2C : 0xB5161420;
+        int stroke = enabled ? (accent & 0x00FFFFFF) | 0xAA000000 : 0x554F4A5F;
+        pill(canvas, r, fill, stroke);
+        text(canvas, title, r.left + dp(14), r.centerY() - dp(3), 11,
+                enabled ? 0xFFFFFFFF : 0xFF777183, Paint.Align.LEFT, true);
+        text(canvas, detail, r.left + dp(14), r.centerY() + dp(16), 9,
+                enabled ? accent : 0xFF696474, Paint.Align.LEFT, true);
+    }
+
+    private void drawGame(Canvas canvas, Creature active) {
+        int accent = active.type == LIGHT ? 0xFFFFD45C : 0xFF8156FF;
+        drawBackground(canvas, active.type);
+        drawTopBar(canvas);
+
+        float w = getWidth();
+        float h = getHeight();
+        float margin = dp(16);
+
+        RectF hero = new RectF(margin, dp(86), w - margin, h * 0.61f);
+        paint.setShader(new LinearGradient(hero.left, hero.top, hero.right, hero.bottom,
+                active.type == LIGHT ? 0xDD302B32 : 0xDD21172F,
+                0xDD11101A, Shader.TileMode.CLAMP));
+        paint.setStyle(Paint.Style.FILL);
+        canvas.drawRoundRect(hero, dp(28), dp(28), paint);
+        paint.setShader(null);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(dp(1.4f));
+        paint.setColor(accent);
+        canvas.drawRoundRect(hero, dp(28), dp(28), paint);
+
+        text(canvas, typeName(active.type) + " · " + stageName(active.stage),
+                hero.left + dp(20), hero.top + dp(32), 14,
+                0xFFFFFFFF, Paint.Align.LEFT, true);
+        text(canvas, "ACTIVE CREATURE",
+                hero.left + dp(20), hero.top + dp(50), 8,
+                0xFFA9A3B9, Paint.Align.LEFT, true);
+
+        float artTop = hero.top + dp(54);
+        float artBottom = hero.bottom - dp(66);
+        float artSize = Math.min(hero.width() - dp(32), artBottom - artTop);
+        RectF art = new RectF(hero.centerX() - artSize / 2f, artTop,
+                hero.centerX() + artSize / 2f, artTop + artSize);
+        drawCreatureArt(canvas, active.type, active.stage, art);
+        drawProgress(canvas, active, hero, accent);
+
+        float controlsTop = hero.bottom + dp(14);
+        float gap = dp(10);
+        float buttonW = (w - margin * 2f - gap) / 2f;
+        float buttonH = Math.min(dp(74), (h - controlsTop - dp(26) - gap) / 2f);
+
+        nextButton.set(margin, controlsTop, margin + buttonW, controlsTop + buttonH);
+        eggButton.set(margin + buttonW + gap, controlsTop, w - margin, controlsTop + buttonH);
+        tapButton.set(margin, controlsTop + buttonH + gap,
+                margin + buttonW, controlsTop + buttonH * 2f + gap);
+        afkButton.set(margin + buttonW + gap, controlsTop + buttonH + gap,
+                w - margin, controlsTop + buttonH * 2f + gap);
+
+        drawControl(canvas, nextButton, "COLLECTION", creatures.size() + " CREATURES",
+                creatures.size() > 1, accent);
+        drawControl(canvas, eggButton, "MYSTERY EGG", "1,000 COINS",
+                coins >= 1000, accent);
+        drawControl(canvas, tapButton,
+                String.format(Locale.US, "TAP  ×%.1f", tapPower),
+                tapUpgradeCost() + " COINS", coins >= tapUpgradeCost(), accent);
+        drawControl(canvas, afkButton,
+                String.format(Locale.US, "AFK  ×%.1f", passivePower),
+                passiveUpgradeCost() + " COINS", coins >= passiveUpgradeCost(), accent);
     }
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        float w = getWidth();
-        float h = getHeight();
-
-        drawText(canvas, "TAP TAP", w / 2f, 72f, 48f, 0xFFFFFFFF, Paint.Align.CENTER);
-        drawText(canvas, "Coins " + Math.max(0L, Math.round(coins)), 32f, 122f, 30f,
-                0xFFFFD85A, Paint.Align.LEFT);
-
         if (creatures.isEmpty()) {
-            drawText(canvas, "Choose your first egg", w / 2f, h * 0.25f, 34f,
-                    0xFFFFFFFF, Paint.Align.CENTER);
-            RectF light = new RectF(28f, h * 0.34f, w / 2f - 12f, h * 0.68f);
-            RectF dark = new RectF(w / 2f + 12f, h * 0.34f, w - 28f, h * 0.68f);
-            drawStarterCard(canvas, light, LIGHT, "LIGHT EGG");
-            drawStarterCard(canvas, dark, DARK, "DARK EGG");
-            drawText(canvas, "Tap an egg to start", w / 2f, h * 0.74f, 24f,
-                    0xFFD7D2E9, Paint.Align.CENTER);
+            drawStart(canvas);
             return;
         }
 
         Creature active = activeCreature();
-        if (active == null) return;
-
-        drawText(canvas, typeName(active.type) + " · " + stageName(active.stage),
-                w / 2f, 170f, 34f, 0xFFFFFFFF, Paint.Align.CENTER);
-
-        float creatureRadius = Math.min(w, h) * 0.16f + active.stage * 10f;
-        drawCreature(canvas, active, w / 2f, h * 0.37f, creatureRadius);
-
-        if (active.stage < ADULT) {
-            double need = stageThreshold(active.stage);
-            int pct = (int) Math.min(100, Math.round(active.progress * 100.0 / need));
-            drawText(canvas, "Tap to evolve · " + pct + "%", w / 2f, h * 0.58f,
-                    28f, 0xFFD7D2E9, Paint.Align.CENTER);
-        } else {
-            drawText(canvas, "Adult · keep tapping for coins", w / 2f, h * 0.58f,
-                    28f, 0xFFD7D2E9, Paint.Align.CENTER);
-        }
-
-        float top = h * 0.66f;
-        float gap = 14f;
-        float bw = (w - 56f - gap) / 2f;
-        float bh = 82f;
-        RectF next = new RectF(28f, top, 28f + bw, top + bh);
-        RectF randomEgg = new RectF(28f + bw + gap, top, w - 28f, top + bh);
-        RectF tapUpgrade = new RectF(28f, top + bh + gap, 28f + bw, top + bh * 2 + gap);
-        RectF passiveUpgrade = new RectF(28f + bw + gap, top + bh + gap, w - 28f, top + bh * 2 + gap);
-
-        drawButton(canvas, next, "NEXT · " + creatures.size(), creatures.size() > 1);
-        drawButton(canvas, randomEgg, "RANDOM EGG · 1000", coins >= 1000);
-        drawButton(canvas, tapUpgrade,
-                String.format(Locale.US, "TAP %.1fx · %d", tapPower, tapUpgradeCost()),
-                coins >= tapUpgradeCost());
-        drawButton(canvas, passiveUpgrade,
-                String.format(Locale.US, "AFK %.1fx · %d", passivePower, passiveUpgradeCost()),
-                coins >= passiveUpgradeCost());
+        if (active != null) drawGame(canvas, active);
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {
         if (event.getAction() != MotionEvent.ACTION_UP) return true;
-
         float x = event.getX();
         float y = event.getY();
-        float w = getWidth();
-        float h = getHeight();
 
         if (creatures.isEmpty()) {
-            if (y >= h * 0.34f && y <= h * 0.68f) {
-                chooseStarter(x < w / 2f ? LIGHT : DARK);
-            }
+            if (starterLight.contains(x, y)) chooseStarter(LIGHT);
+            else if (starterDark.contains(x, y)) chooseStarter(DARK);
             return true;
         }
 
-        if (y >= h * 0.18f && y <= h * 0.62f) {
+        Creature active = activeCreature();
+        if (active == null) return true;
+
+        float heroBottom = getHeight() * 0.61f;
+        if (y >= dp(86) && y <= heroBottom) {
             tapActive();
             return true;
         }
 
-        float top = h * 0.66f;
-        float gap = 14f;
-        float bw = (w - 56f - gap) / 2f;
-        float bh = 82f;
-
-        if (y >= top && y <= top + bh) {
-            if (x <= 28f + bw) cycleActive();
-            else buyRandomEgg();
-            return true;
-        }
-
-        if (y >= top + bh + gap && y <= top + bh * 2 + gap) {
-            if (x <= 28f + bw) buyTapUpgrade();
-            else buyPassiveUpgrade();
-            return true;
-        }
+        if (nextButton.contains(x, y)) cycleActive();
+        else if (eggButton.contains(x, y)) buyRandomEgg();
+        else if (tapButton.contains(x, y)) buyTapUpgrade();
+        else if (afkButton.contains(x, y)) buyPassiveUpgrade();
 
         return true;
     }
 
     @Override protected void onDetachedFromWindow() {
-        removeCallbacks(passiveTick);
-        saveAndLeave();
+        pauseGame();
         super.onDetachedFromWindow();
     }
 }
