@@ -9,6 +9,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.graphics.drawable.Icon;
 
 public final class NotificationHelper {
     public static final String CHANNEL_PROGRESS = "tap_tap_progress";
@@ -72,6 +73,7 @@ public final class NotificationHelper {
                 : new Notification.Builder(context);
 
         builder.setSmallIcon(R.drawable.ic_taptap_notification)
+                .setLargeIcon(Icon.createWithResource(context, R.drawable.ic_taptap_foreground))
                 .setContentTitle(title)
                 .setContentText(text)
                 .setSubText("Tap Tap")
