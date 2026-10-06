@@ -3,7 +3,7 @@
 
     <application
         android:theme="@style/AppTheme"
-        android:label="Tap Tap V1 Beta"
+        android:label="Tap Tap V2 Beta"
         android:icon="@drawable/tap_tap_icon"
         android:roundIcon="@drawable/tap_tap_icon"
         android:allowBackup="true"
