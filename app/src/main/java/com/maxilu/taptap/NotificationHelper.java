@@ -73,7 +73,7 @@ public final class NotificationHelper {
                 : new Notification.Builder(context);
 
         builder.setSmallIcon(R.drawable.ic_taptap_notification)
-                .setLargeIcon(Icon.createWithResource(context, R.drawable.ic_taptap_foreground))
+                .setLargeIcon(Icon.createWithResource(context, R.drawable.tap_tap_icon))
                 .setContentTitle(title)
                 .setContentText(text)
                 .setSubText("Tap Tap")
