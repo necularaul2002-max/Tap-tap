@@ -7,6 +7,8 @@ workflows:
     environment:
       java: 17
       xcode: latest
+      vars:
+        GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx2048m"
 
     triggering:
       events:
@@ -22,21 +24,31 @@ workflows:
         - $HOME/.gradle/wrapper
 
     scripts:
-      - name: Configure Android SDK
+      - name: Verify public source checkout
         script: |
           set -euo pipefail
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
-          echo "Android SDK: $ANDROID_SDK_ROOT"
+          cd "$CM_BUILD_DIR"
+          echo "Repository checkout OK"
+          git remote -v || true
+          git rev-parse --short HEAD
+          test -f settings.gradle
+          test -f app/build.gradle
+
+      - name: Configure Android SDK 35
+        script: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/share/android-sdk}}"
+          echo "sdk.dir=$SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+          echo "Android SDK: $SDK_ROOT"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
           java -version
 
-      - name: Verify Gradle
+      - name: Verify Gradle 8.14.1
         script: |
           set -euo pipefail
           GRADLE_BIN="/Users/builder/programs/gradle-8.14.1/bin/gradle"
-          if [ ! -x "$GRADLE_BIN" ]; then
-            GRADLE_BIN="$(command -v gradle)"
-          fi
-          echo "Using Gradle: $GRADLE_BIN"
+          test -x "$GRADLE_BIN"
           "$GRADLE_BIN" --version
 
       - name: Build Tap Tap V1 Beta APK
@@ -44,19 +56,11 @@ workflows:
           set -euo pipefail
           cd "$CM_BUILD_DIR"
           GRADLE_BIN="/Users/builder/programs/gradle-8.14.1/bin/gradle"
-          if [ ! -x "$GRADLE_BIN" ]; then
-            GRADLE_BIN="$(command -v gradle)"
-          fi
           echo "=== TAP TAP V1 BETA BUILD START ==="
-          "$GRADLE_BIN" \
-            --no-daemon \
-            --console=plain \
-            --stacktrace \
-            --info \
-            :app:assembleDebug
-          echo "=== TAP TAP V1 BETA BUILD COMPLETE ==="
+          "$GRADLE_BIN" clean :app:assembleDebug             --no-daemon             --console=plain             --stacktrace
           test -f app/build/outputs/apk/debug/app-debug.apk
-          mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/TapTap-v1-beta.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/TapTap-v1-beta.apk
+          echo "=== TAP TAP V1 BETA BUILD COMPLETE ==="
           shasum -a 256 app/build/outputs/apk/debug/TapTap-v1-beta.apk
           ls -lh app/build/outputs/apk/debug/TapTap-v1-beta.apk
 
