@@ -12,13 +12,13 @@ import java.nio.charset.StandardCharsets;
 final class ArtLoader {
     private ArtLoader() {}
 
-    static Bitmap loadBase64Chunks(Context context, String prefix, int count) {
+    static Bitmap loadBase64Chunks(Context context, String... assetNames) {
         try {
             StringBuilder encoded = new StringBuilder();
             byte[] buffer = new byte[8192];
 
-            for (int i = 0; i < count; i++) {
-                try (InputStream in = context.getAssets().open(prefix + i + ".b64");
+            for (String assetName : assetNames) {
+                try (InputStream in = context.getAssets().open(assetName);
                      ByteArrayOutputStream out = new ByteArrayOutputStream()) {
                     int read;
                     while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
