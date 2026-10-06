@@ -8,19 +8,32 @@ workflows:
     scripts:
       - name: Configure Android SDK
         script: |
+          set -e
+          echo "Configuring Android SDK..."
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+          echo "Android SDK ready."
 
       - name: Install Gradle 8.9
         script: |
+          set -e
           cd "$CM_BUILD_DIR"
-          curl -L -o gradle-8.9-bin.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
-          unzip -q gradle-8.9-bin.zip
-          "$CM_BUILD_DIR/gradle-8.9/bin/gradle" --version
+          echo "Preparing Gradle 8.9..."
+          if [ ! -x "$HOME/gradle-8.9/bin/gradle" ]; then
+            curl --fail --location --retry 3 --output "$HOME/gradle-8.9-bin.zip" https://services.gradle.org/distributions/gradle-8.9-bin.zip
+            rm -rf "$HOME/gradle-8.9"
+            unzip -q "$HOME/gradle-8.9-bin.zip" -d "$HOME"
+          fi
+          "$HOME/gradle-8.9/bin/gradle" --version
+          echo "Gradle ready."
 
       - name: Build debug APK
         script: |
+          set -e
           cd "$CM_BUILD_DIR"
-          "$CM_BUILD_DIR/gradle-8.9/bin/gradle" :app:assembleDebug --stacktrace
+          echo "Starting Tap Tap APK build..."
+          "$HOME/gradle-8.9/bin/gradle" --no-daemon --console=plain :app:assembleDebug
+          echo "APK build finished."
+          ls -lah app/build/outputs/apk/debug/
 
     artifacts:
       - app/build/outputs/apk/debug/*.apk
