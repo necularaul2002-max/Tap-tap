@@ -3,8 +3,15 @@ workflows:
     name: Tap Tap Android APK
     instance_type: mac_mini_m2
     max_build_duration: 30
+
     environment:
       java: 17
+
+    cache:
+      cache_paths:
+        - $HOME/.gradle/caches
+        - $HOME/gradle-8.9
+
     scripts:
       - name: Configure Android SDK
         script: |
@@ -22,9 +29,10 @@ workflows:
             curl --fail --location --retry 3 --output "$HOME/gradle-8.9-bin.zip" https://services.gradle.org/distributions/gradle-8.9-bin.zip
             rm -rf "$HOME/gradle-8.9"
             unzip -q "$HOME/gradle-8.9-bin.zip" -d "$HOME"
+          else
+            echo "Using cached Gradle 8.9."
           fi
           "$HOME/gradle-8.9/bin/gradle" --version
-          echo "Gradle ready."
 
       - name: Build debug APK
         script: |
