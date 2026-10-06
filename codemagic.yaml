@@ -1,6 +1,6 @@
 workflows:
   android-debug:
-    name: Tap Tap V1 Beta APK
+    name: Tap Tap V2 Beta APK
     instance_type: mac_mini_m2
     max_build_duration: 20
 
@@ -58,7 +58,7 @@ workflows:
           test -x "$GRADLE_BIN"
           "$GRADLE_BIN" --version
 
-      - name: Build Tap Tap V1 Beta APK
+      - name: Build Tap Tap V2 Beta APK
         script: |
           set -euo pipefail
           cd "$CM_BUILD_DIR"
@@ -68,7 +68,7 @@ workflows:
             GRADLE_BIN="/Users/builder/programs/gradle-8.14.1/bin/gradle"
           fi
 
-          echo "=== TAP TAP V1 BETA BUILD START ==="
+          echo "=== TAP TAP V2 BETA BUILD START ==="
           "$GRADLE_BIN" clean :app:assembleDebug \
             --no-daemon \
             --console=plain \
@@ -76,11 +76,11 @@ workflows:
 
           test -f app/build/outputs/apk/debug/app-debug.apk
           cp app/build/outputs/apk/debug/app-debug.apk \
-            app/build/outputs/apk/debug/TapTap-v1-beta.apk
+            app/build/outputs/apk/debug/TapTap-v2-beta.apk
 
-          echo "=== TAP TAP V1 BETA BUILD COMPLETE ==="
-          shasum -a 256 app/build/outputs/apk/debug/TapTap-v1-beta.apk
-          ls -lh app/build/outputs/apk/debug/TapTap-v1-beta.apk
+          echo "=== TAP TAP V2 BETA BUILD COMPLETE ==="
+          shasum -a 256 app/build/outputs/apk/debug/TapTap-v2-beta.apk
+          ls -lh app/build/outputs/apk/debug/TapTap-v2-beta.apk
 
     artifacts:
-      - app/build/outputs/apk/debug/TapTap-v1-beta.apk
+      - app/build/outputs/apk/debug/TapTap-v2-beta.apk
