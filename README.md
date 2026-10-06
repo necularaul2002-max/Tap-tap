@@ -36,3 +36,6 @@ Version: **1.0.0-beta**
 Output artifact: **TapTap-v1-beta.apk**
 
 The project targets Android SDK 35, Java 17, and uses Codemagic for APK builds.
+
+## GitHub build
+GitHub Actions also builds **TapTap-v1-beta.apk** on every push to `main` and stores it as an artifact.
