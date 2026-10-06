@@ -2,19 +2,33 @@
 
 Android MVP for the Tap Tap monster game.
 
-## MVP
+## MVP gameplay
 - Starter choice: Light Egg or Dark Egg
 - One active creature at a time
 - Tap progression: Egg -> Baby -> Mid -> Adult
 - Opposite starter unlocks after first hatch
-- Pen/collection with active creature selection
+- Collection cycling with active creature selection
 - Inactive hatched creatures generate 75% passive coins
 - Offline earnings capped at 6 hours
 - Tap and passive-income upgrades in +0.5x steps
 - Random Egg costs 1,000 coins and must be opened by tapping
 - Versioned local save with migrations for safe app updates
-- Hybrid system reserved for a later update
+
+## Visuals
+- Native Android vector assets for Light: Egg / Baby / Mid / Adult
+- Native Android vector assets for Dark: Egg / Baby / Mid / Adult
+- Hybrid Egg / Baby / Mid / Adult assets are bundled for a later gameplay update
+- Branded split Light/Dark Tap Tap launcher icon
+- Dedicated monochrome notification icon
+
+## Notifications
+- TAP TAP · Egg hatched
+- TAP TAP · Offline rewards
+- TAP TAP · Update available
+- Tap opens the game
+- Separate Android notification channels for Progress, Rewards and Updates
 
 ## Build
-Open in Android Studio with JDK 17 / Android SDK 35 and build the app module.
-GitHub Actions builds a debug APK on pushes to main.
+Codemagic workflow: **Tap Tap Android APK**
+
+The project targets Android SDK 35, Java 17, and builds the debug APK with Gradle 8.9.
