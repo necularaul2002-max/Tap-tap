@@ -31,12 +31,12 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onPause() {
+        if (game != null) game.pauseGame();
         super.onPause();
-        if (game != null) game.saveAndLeave();
     }
 
     @Override protected void onResume() {
         super.onResume();
-        if (game != null) game.applyOffline();
+        if (game != null) game.resumeGame();
     }
 }
