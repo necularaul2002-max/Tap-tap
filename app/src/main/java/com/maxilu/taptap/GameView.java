@@ -103,7 +103,12 @@ public class GameView extends View {
         evolutionSheets[LIGHT] =
                 BitmapFactory.decodeResource(getResources(), R.drawable.light_evolution_real);
         evolutionSheets[DARK] =
-                ArtLoader.loadBase64Chunks(context, "v2/dark_", 4);
+                ArtLoader.loadBase64Chunks(context,
+                        "v2/dark_0.b64",
+                        "v2/dark_1a.b64",
+                        "v2/dark_1b.b64",
+                        "v2/dark_2.b64",
+                        "v2/dark_3.b64");
         logo = BitmapFactory.decodeResource(getResources(), R.drawable.tap_tap_icon);
 
         paint.setTypeface(Typeface.create("sans", Typeface.NORMAL));
