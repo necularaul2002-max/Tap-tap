@@ -36,10 +36,15 @@ workflows:
         script: |
           set -euo pipefail
           SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/share/android-sdk}}"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+
           echo "sdk.dir=$SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
           echo "Android SDK: $SDK_ROOT"
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          echo "SDK Manager: $SDKMANAGER"
+
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
           java -version
 
       - name: Verify Gradle
