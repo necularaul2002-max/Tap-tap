@@ -1,6 +1,6 @@
-# Tap Tap — MVP
+# Tap Tap — V1 Beta
 
-Android MVP for the Tap Tap monster game.
+Android V1 Beta for the Tap Tap monster game.
 
 ## MVP gameplay
 - Starter choice: Light Egg or Dark Egg
@@ -29,6 +29,10 @@ Android MVP for the Tap Tap monster game.
 - Separate Android notification channels for Progress, Rewards and Updates
 
 ## Build
-Codemagic workflow: **Tap Tap Android APK**
+Codemagic workflow: **Tap Tap V1 Beta APK**
 
-The project targets Android SDK 35, Java 17, and builds the debug APK with Gradle 8.9.
+Version: **1.0.0-beta**
+
+Output artifact: **TapTap-v1-beta.apk**
+
+The project targets Android SDK 35, Java 17, and uses Codemagic for APK builds.
