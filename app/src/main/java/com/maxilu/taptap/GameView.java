@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -27,6 +28,7 @@ public class GameView extends View {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final ArrayList<Creature> creatures = new ArrayList<>();
     private final Random random = new Random();
+    private final Drawable[][] creatureArt;
 
     private double coins;
     private double tapPower = 1.0;
@@ -61,6 +63,20 @@ public class GameView extends View {
     public GameView(Context context) {
         super(context);
         sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        creatureArt = new Drawable[][]{
+                {
+                        context.getDrawable(R.drawable.light_egg),
+                        context.getDrawable(R.drawable.light_baby),
+                        context.getDrawable(R.drawable.light_mid),
+                        context.getDrawable(R.drawable.light_adult)
+                },
+                {
+                        context.getDrawable(R.drawable.dark_egg),
+                        context.getDrawable(R.drawable.dark_baby),
+                        context.getDrawable(R.drawable.dark_mid),
+                        context.getDrawable(R.drawable.dark_adult)
+                }
+        };
         paint.setTypeface(android.graphics.Typeface.create("sans", android.graphics.Typeface.NORMAL));
         setBackgroundColor(0xFF171526);
         load();
@@ -283,35 +299,38 @@ public class GameView extends View {
                 enabled ? 0xFFFFFFFF : 0xFF8A8597, Paint.Align.CENTER);
     }
 
-    private void drawCreature(Canvas c, Creature cr, float cx, float cy, float radius) {
-        int main = cr.type == LIGHT ? 0xFFFFD85A : 0xFF6E45D8;
-        int accent = cr.type == LIGHT ? 0xFFF9F6E8 : 0xFF1C1831;
+    private void drawCreature(Canvas canvas, Creature cr, float cx, float cy, float radius) {
+        int safeType = cr.type == DARK ? DARK : LIGHT;
+        int safeStage = Math.max(EGG, Math.min(ADULT, cr.stage));
+        Drawable art = creatureArt[safeType][safeStage];
+        if (art == null) return;
 
+        int size = Math.round(radius * 2.35f);
+        int left = Math.round(cx - size / 2f);
+        int top = Math.round(cy - size / 2f);
+        art.setBounds(left, top, left + size, top + size);
+        art.draw(canvas);
+    }
+
+    private void drawStarterCard(Canvas canvas, RectF card, int type, String label) {
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(main);
-        c.drawOval(new RectF(cx - radius * 0.62f, cy - radius, cx + radius * 0.62f, cy + radius), paint);
+        paint.setColor(type == LIGHT ? 0xFF332D48 : 0xFF211B35);
+        canvas.drawRoundRect(card, 28f, 28f, paint);
 
         paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(Math.max(6f, radius * 0.08f));
-        paint.setColor(accent);
-        c.drawOval(new RectF(cx - radius * 0.62f, cy - radius, cx + radius * 0.62f, cy + radius), paint);
+        paint.setStrokeWidth(4f);
+        paint.setColor(type == LIGHT ? 0xFFFFD34E : 0xFF7B4DFF);
+        canvas.drawRoundRect(card, 28f, 28f, paint);
 
-        if (cr.stage > EGG) {
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(0xFFFFFFFF);
-            float eyeY = cy - radius * 0.2f;
-            c.drawCircle(cx - radius * 0.22f, eyeY, radius * 0.12f, paint);
-            c.drawCircle(cx + radius * 0.22f, eyeY, radius * 0.12f, paint);
-            paint.setColor(0xFF15121F);
-            c.drawCircle(cx - radius * 0.22f, eyeY, radius * 0.055f, paint);
-            c.drawCircle(cx + radius * 0.22f, eyeY, radius * 0.055f, paint);
+        Drawable egg = creatureArt[type][EGG];
+        int artSize = Math.round(Math.min(card.width(), card.height()) * 0.62f);
+        int cx = Math.round(card.centerX());
+        int cy = Math.round(card.top + card.height() * 0.42f);
+        egg.setBounds(cx - artSize / 2, cy - artSize / 2, cx + artSize / 2, cy + artSize / 2);
+        egg.draw(canvas);
 
-            if (cr.stage >= MID) {
-                paint.setColor(main);
-                c.drawCircle(cx - radius * 0.65f, cy - radius * 0.35f, radius * 0.28f, paint);
-                c.drawCircle(cx + radius * 0.65f, cy - radius * 0.35f, radius * 0.28f, paint);
-            }
-        }
+        drawText(canvas, label, card.centerX(), card.bottom - 34f, 25f,
+                0xFFFFFFFF, Paint.Align.CENTER);
     }
 
     @Override protected void onDraw(Canvas canvas) {
@@ -328,8 +347,10 @@ public class GameView extends View {
                     0xFFFFFFFF, Paint.Align.CENTER);
             RectF light = new RectF(28f, h * 0.34f, w / 2f - 12f, h * 0.68f);
             RectF dark = new RectF(w / 2f + 12f, h * 0.34f, w - 28f, h * 0.68f);
-            drawButton(canvas, light, "LIGHT EGG", true);
-            drawButton(canvas, dark, "DARK EGG", true);
+            drawStarterCard(canvas, light, LIGHT, "LIGHT EGG");
+            drawStarterCard(canvas, dark, DARK, "DARK EGG");
+            drawText(canvas, "Tap an egg to start", w / 2f, h * 0.74f, 24f,
+                    0xFFD7D2E9, Paint.Align.CENTER);
             return;
         }
 
