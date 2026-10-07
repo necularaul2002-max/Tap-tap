@@ -24,6 +24,8 @@ import java.util.Random;
 public class GameView extends View {
     private static final String PREFS = "tap_tap_save";
     private static final long OFFLINE_CAP_MS = 6L * 60L * 60L * 1000L;
+    private static final int GEM_BUY_COST = 1000;
+    private static final int GEM_SELL_VALUE = 850;
 
     private static final int LIGHT = 0;
     private static final int DARK = 1;
@@ -47,8 +49,11 @@ public class GameView extends View {
     private final RectF eggButton = new RectF();
     private final RectF tapButton = new RectF();
     private final RectF afkButton = new RectF();
+    private final RectF buyGemButton = new RectF();
+    private final RectF sellGemButton = new RectF();
 
     private double coins;
+    private int gems;
     private double tapPower = 1.0;
     private double passivePower = 1.0;
     private int activeId = -1;
@@ -123,6 +128,7 @@ public class GameView extends View {
 
     private void load() {
         coins = Double.longBitsToDouble(sp.getLong("coins_bits", Double.doubleToRawLongBits(0.0)));
+        gems = Math.max(0, sp.getInt("gems", 0));
         tapPower = Double.longBitsToDouble(sp.getLong("tap_power_bits", Double.doubleToRawLongBits(1.0)));
         passivePower = Double.longBitsToDouble(sp.getLong("passive_power_bits", Double.doubleToRawLongBits(1.0)));
         activeId = sp.getInt("active_id", -1);
@@ -144,6 +150,7 @@ public class GameView extends View {
     private void save() {
         SharedPreferences.Editor e = sp.edit();
         e.putLong("coins_bits", Double.doubleToRawLongBits(coins));
+        e.putInt("gems", Math.max(0, gems));
         e.putLong("tap_power_bits", Double.doubleToRawLongBits(tapPower));
         e.putLong("passive_power_bits", Double.doubleToRawLongBits(passivePower));
         e.putInt("active_id", activeId);
@@ -328,6 +335,39 @@ public class GameView extends View {
         invalidate();
     }
 
+    private void buyGem() {
+        if (coins < GEM_BUY_COST) return;
+        coins -= GEM_BUY_COST;
+        gems += 1;
+        haptic();
+        save();
+        invalidate();
+    }
+
+    private void sellGem() {
+        if (gems <= 0) return;
+        gems -= 1;
+        coins += GEM_SELL_VALUE;
+        haptic();
+        save();
+        invalidate();
+    }
+
+    // Future-ready hooks for gem-only systems such as rerolls, cosmetics,
+    // special eggs, prestige utilities and event crafting.
+    private boolean spendGems(int amount) {
+        if (amount <= 0 || gems < amount) return false;
+        gems -= amount;
+        save();
+        return true;
+    }
+
+    private void addGems(int amount) {
+        if (amount <= 0) return;
+        gems += amount;
+        save();
+    }
+
     private void haptic() {
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
     }
@@ -476,19 +516,26 @@ public class GameView extends View {
 
     private void drawTopBar(Canvas canvas) {
         float w = getWidth();
-        drawLogo(canvas, dp(42), dp(46), dp(52));
-        text(canvas, "TAP TAP", dp(78), dp(42), 19,
+        text(canvas, "TAP TAP", dp(18), dp(42), 20,
                 0xFFFFFFFF, Paint.Align.LEFT, true);
-        text(canvas, "MONSTER LAB", dp(78), dp(59), 8,
+        text(canvas, "MONSTER LAB", dp(18), dp(59), 8,
                 0xFF948EA8, Paint.Align.LEFT, true);
 
-        RectF coinsPill = new RectF(w - dp(142), dp(24), w - dp(16), dp(66));
-        pill(canvas, coinsPill, 0xCC1A1725, 0x55FFFFFF);
-        text(canvas, "COINS", coinsPill.left + dp(14), coinsPill.centerY() - dp(3),
-                8, 0xFFA9A3B9, Paint.Align.LEFT, true);
+        RectF wallet = new RectF(w - dp(166), dp(20), w - dp(14), dp(68));
+        pill(canvas, wallet, 0xCC1A1725, 0x55FFFFFF);
+
+        float mid = wallet.centerX();
+        text(canvas, "COINS", wallet.left + dp(12), wallet.centerY() - dp(5),
+                7, 0xFFA9A3B9, Paint.Align.LEFT, true);
         text(canvas, String.valueOf(Math.max(0L, Math.round(coins))),
-                coinsPill.left + dp(14), coinsPill.centerY() + dp(13),
-                14, 0xFFFFD45C, Paint.Align.LEFT, true);
+                wallet.left + dp(12), wallet.centerY() + dp(13),
+                13, 0xFFFFD45C, Paint.Align.LEFT, true);
+
+        text(canvas, "GEMS", mid + dp(8), wallet.centerY() - dp(5),
+                7, 0xFFA9A3B9, Paint.Align.LEFT, true);
+        text(canvas, String.valueOf(Math.max(0, gems)),
+                mid + dp(8), wallet.centerY() + dp(13),
+                13, 0xFF6FE8FF, Paint.Align.LEFT, true);
     }
 
     private void drawProgress(Canvas canvas, Creature active, RectF panel, int accent) {
@@ -568,22 +615,35 @@ public class GameView extends View {
         drawCreatureArt(canvas, active.type, active.stage, art);
         drawProgress(canvas, active, hero, accent);
 
-        float controlsTop = hero.bottom + dp(14);
-        float gap = dp(10);
+        float controlsTop = hero.bottom + dp(12);
+        float gap = dp(8);
         float buttonW = (w - margin * 2f - gap) / 2f;
-        float buttonH = Math.min(dp(74), (h - controlsTop - dp(26) - gap) / 2f);
+        float available = h - controlsTop - dp(20) - gap * 2f;
+        float buttonH = Math.min(dp(62), Math.max(dp(48), available / 3f));
 
         nextButton.set(margin, controlsTop, margin + buttonW, controlsTop + buttonH);
         eggButton.set(margin + buttonW + gap, controlsTop, w - margin, controlsTop + buttonH);
-        tapButton.set(margin, controlsTop + buttonH + gap,
+
+        buyGemButton.set(margin, controlsTop + buttonH + gap,
                 margin + buttonW, controlsTop + buttonH * 2f + gap);
-        afkButton.set(margin + buttonW + gap, controlsTop + buttonH + gap,
+        sellGemButton.set(margin + buttonW + gap, controlsTop + buttonH + gap,
                 w - margin, controlsTop + buttonH * 2f + gap);
+
+        tapButton.set(margin, controlsTop + buttonH * 2f + gap * 2f,
+                margin + buttonW, controlsTop + buttonH * 3f + gap * 2f);
+        afkButton.set(margin + buttonW + gap, controlsTop + buttonH * 2f + gap * 2f,
+                w - margin, controlsTop + buttonH * 3f + gap * 2f);
 
         drawControl(canvas, nextButton, "COLLECTION", creatures.size() + " CREATURES",
                 creatures.size() > 1, accent);
         drawControl(canvas, eggButton, "MYSTERY EGG", "1,000 COINS",
                 coins >= 1000, accent);
+
+        drawControl(canvas, buyGemButton, "BUY GEM", GEM_BUY_COST + " COINS",
+                coins >= GEM_BUY_COST, 0xFF6FE8FF);
+        drawControl(canvas, sellGemButton, "SELL GEM", GEM_SELL_VALUE + " COINS",
+                gems > 0, 0xFF6FE8FF);
+
         drawControl(canvas, tapButton,
                 String.format(Locale.US, "TAP  ×%.1f", tapPower),
                 tapUpgradeCost() + " COINS", coins >= tapUpgradeCost(), accent);
@@ -625,6 +685,8 @@ public class GameView extends View {
 
         if (nextButton.contains(x, y)) cycleActive();
         else if (eggButton.contains(x, y)) buyRandomEgg();
+        else if (buyGemButton.contains(x, y)) buyGem();
+        else if (sellGemButton.contains(x, y)) sellGem();
         else if (tapButton.contains(x, y)) buyTapUpgrade();
         else if (afkButton.contains(x, y)) buyPassiveUpgrade();
 
