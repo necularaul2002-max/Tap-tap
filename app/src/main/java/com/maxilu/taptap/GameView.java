@@ -40,7 +40,6 @@ public class GameView extends View {
     private final Random random = new Random();
     private final Drawable[][] fallbackArt;
     private final Bitmap[] evolutionSheets = new Bitmap[2];
-    private final Bitmap logo;
     private final float density;
 
     private final RectF starterLight = new RectF();
@@ -114,8 +113,6 @@ public class GameView extends View {
                         "v2/dark_1b.b64",
                         "v2/dark_2.b64",
                         "v2/dark_3.b64");
-        logo = BitmapFactory.decodeResource(getResources(), R.drawable.tap_tap_icon);
-
         paint.setTypeface(Typeface.create("sans", Typeface.NORMAL));
         setBackgroundColor(0xFF0C0A16);
         setFocusable(true);
@@ -408,13 +405,6 @@ public class GameView extends View {
         c.drawRoundRect(r, dp(18), dp(18), paint);
     }
 
-    private void drawLogo(Canvas canvas, float cx, float cy, float size) {
-        if (logo == null) return;
-        Rect src = new Rect(0, 0, logo.getWidth(), logo.getHeight());
-        RectF dst = new RectF(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f);
-        canvas.drawBitmap(logo, src, dst, paint);
-    }
-
     private Rect spriteRect(Bitmap sheet, int stage) {
         int cw = sheet.getWidth() / 2;
         int ch = sheet.getHeight() / 2;
@@ -490,16 +480,17 @@ public class GameView extends View {
         float w = getWidth();
         float h = getHeight();
 
-        drawLogo(canvas, w / 2f, dp(82), dp(82));
-        text(canvas, "TAP TAP", w / 2f, dp(143), 30,
+        text(canvas, "TAP TAP", w / 2f, dp(92), 34,
                 0xFFFFFFFF, Paint.Align.CENTER, true);
-        text(canvas, "V2 BETA  ·  CHOOSE YOUR ORIGIN", w / 2f, dp(166), 10,
+        text(canvas, "V3 BETA  ·  CHOOSE YOUR ORIGIN", w / 2f, dp(118), 10,
                 0xFFAAA4BC, Paint.Align.CENTER, true);
+        text(canvas, "Build your collection. Store value in Gems.",
+                w / 2f, dp(145), 10, 0xFFD2CCDF, Paint.Align.CENTER, false);
 
         float cardH = Math.min(dp(184), h * 0.205f);
         float left = dp(18);
         float right = w - dp(18);
-        float firstTop = Math.max(dp(200), h * 0.245f);
+        float firstTop = Math.max(dp(176), h * 0.215f);
         float gap = dp(18);
 
         starterLight.set(left, firstTop, right, firstTop + cardH);
